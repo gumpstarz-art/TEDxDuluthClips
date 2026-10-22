@@ -9,13 +9,28 @@ on:
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout to the branch
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}/clipmaker:${{ github.sha }}
 
       - name: Azure Login
         uses: azure/login@v2
@@ -24,10 +39,11 @@ jobs:
           tenant-id: ${{ secrets.CLIPMAKER_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.CLIPMAKER_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Deploy to Azure Container App
-        uses: azure/container-apps-deploy-action@v1
+      - name: Deploy image to Azure Container App
+        uses: azure/CLI@v2
         with:
-          appSourcePath: ${{ github.workspace }}
-          containerAppName: clipmaker
-          resourceGroup: TEDxDuluth
-          dockerfilePath: Dockerfile
+          inlineScript: |
+            az containerapp update \
+              --name clipmaker \
+              --resource-group TEDxDuluth \
+              --image ghcr.io/${{ github.repository }}/clipmaker:${{ github.sha }}
