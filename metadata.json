@@ -1,0 +1,6 @@
+{
+  "name": "TEDxDuluth Socials Clip Maker",
+  "description": "Extract AI-powered highlights and render 9:16 vertical video clips with burned-in subtitles for TEDxDuluth social media channels.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
