@@ -1,49 +1,46 @@
 name: Trigger auto deployment for clipmaker
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
-    branches: 
-      [ main ]
-    paths:
-    - '**'
-    - '.github/workflows/clipmaker-AutoDeployTrigger-8e719991-b947-421b-b811-1c993e10a1f5.yml'
-
-  # Allow manual trigger 
-  workflow_dispatch:      
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.CLIPMAKER_AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.CLIPMAKER_AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.CLIPMAKER_AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
-        uses: azure/container-apps-deploy-action@v2
+      - name: Log in to Azure Container Registry
+        run: |
+          az acr login --name ${{ secrets.CONTAINER_REGISTRY_NAME || 'tedxduluth' }}
+
+      - name: Build and push image
+        run: |
+          ACR_NAME="${{ secrets.CONTAINER_REGISTRY_NAME || 'tedxduluth' }}.azurecr.io"
+          IMAGE_TAG="${ACR_NAME}/clipmaker:${{ github.sha }}"
+          
+          docker build -t "$IMAGE_TAG" -t "${ACR_NAME}/clipmaker:latest" .
+          docker push "$IMAGE_TAG"
+          docker push "${ACR_NAME}/clipmaker:latest"
+
+      - name: Deploy to Azure Container App
+        uses: azure/container-apps-deploy-action@v1
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
-          registryUrl: 
-          registryUsername: ${{ secrets.CLIPMAKER_REGISTRY_USERNAME }}
-          registryPassword: ${{ secrets.CLIPMAKER_REGISTRY_PASSWORD }}
           containerAppName: clipmaker
           resourceGroup: TEDxDuluth
-          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
-
-
+          imageToDeploy: ${{ secrets.CONTAINER_REGISTRY_NAME || 'tedxduluth' }}.azurecr.io/clipmaker:${{ github.sha }}
