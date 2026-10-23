@@ -86,6 +86,11 @@ export interface SavedClip {
   subtitlePreset: string;
   layout: string;
   driveExportedUrl?: string;
+  subtitles?: SubtitleLine[];
+  syncOffset?: number;
+  subtitleStyle?: SubtitleStyle;
+  videoSettings?: VideoSettings;
+  talkProjectId?: string;
 }
 
 export interface TeamMember {

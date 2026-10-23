@@ -15,24 +15,32 @@ import {
   ExternalLink,
   CheckCircle2,
   Sparkles,
+  Edit3,
+  Sliders,
 } from 'lucide-react';
 import { SavedClip } from '../types';
 import { MarketingDocModal } from './MarketingDocModal';
+import { EditClipModal } from './EditClipModal';
 
 interface SavedLibraryProps {
   savedClips: SavedClip[];
   onDeleteClip: (id: string) => void;
   onUpdateStatus?: (id: string, status: any) => void;
   onSelectForPublish: (clip: SavedClip) => void;
+  onEditClipInStudio: (clip: SavedClip) => void;
+  onUpdateClip: (clip: SavedClip) => void;
 }
 
 export const SavedLibrary: React.FC<SavedLibraryProps> = ({
   savedClips,
   onDeleteClip,
   onSelectForPublish,
+  onEditClipInStudio,
+  onUpdateClip,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isMarketingDocOpen, setIsMarketingDocOpen] = useState(false);
+  const [editingModalClip, setEditingModalClip] = useState<SavedClip | null>(null);
 
   const handleCopyCaption = (clip: SavedClip) => {
     navigator.clipboard.writeText(clip.socialCaption);
@@ -132,15 +140,27 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
                   </div>
                 )}
 
-                {/* Status Badge: Clean "Ready to Export" with duration */}
-                <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                    Ready
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[10px] text-neutral-300 font-mono">
-                    {clip.duration}s
-                  </span>
+                {/* Status Badge: Clean "Ready to Export" with duration & Quick Edit button */}
+                <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                  <div className="flex items-center gap-1.5 pointer-events-auto">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 backdrop-blur-sm">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      Ready
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[10px] text-neutral-300 font-mono">
+                      {clip.duration}s
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingModalClip(clip)}
+                    className="pointer-events-auto px-2.5 py-1 rounded-full bg-black/75 hover:bg-[#eb0028] text-white text-[11px] font-bold flex items-center gap-1.5 backdrop-blur-md border border-white/20 hover:border-[#eb0028] transition-all cursor-pointer shadow-lg"
+                    title="Quick Edit Title & Social Captions"
+                  >
+                    <Edit3 className="w-3 h-3 text-cyan-300" />
+                    <span>Edit</span>
+                  </button>
                 </div>
               </div>
 
@@ -173,11 +193,12 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
 
             {/* Bottom Actions Bar */}
             <div className="p-4 pt-0 space-y-2.5">
-              <div className="flex items-center gap-2">
+              {/* Primary Action Row: Download 9:16 + Edit Options */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   type="button"
                   onClick={() => handleDownloadVideo(clip)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-[#eb0028] hover:bg-[#d40024] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-[#eb0028]/20"
+                  className="flex-1 min-w-[120px] py-2 px-3 rounded-xl bg-[#eb0028] hover:bg-[#d40024] text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-md shadow-[#eb0028]/20"
                 >
                   <Download className="w-3.5 h-3.5" />
                   Download 9:16
@@ -185,8 +206,27 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => setEditingModalClip(clip)}
+                  className="py-2 px-3 rounded-xl bg-[#1b2030] hover:bg-[#252b40] border border-neutral-700/80 hover:border-neutral-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+                  title="Edit Hook Title, Platform, & Social Captions"
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Edit</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onEditClipInStudio(clip)}
+                  className="py-2 px-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  title="Re-Edit in Clip Studio (Trimming, Timestamps, & Subtitles)"
+                >
+                  <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => handleCopyCaption(clip)}
-                  className="py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  className="py-2 px-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
                   title="Copy Social Caption"
                 >
                   {copiedId === clip.id ? (
@@ -199,7 +239,7 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectForPublish(clip)}
-                  className="py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
+                  className="py-2 px-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold flex items-center justify-center gap-1 transition cursor-pointer"
                   title="Multi-Platform Social Copy & Drive"
                 >
                   <Share2 className="w-3.5 h-3.5 text-pink-400" />
@@ -230,6 +270,21 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
           </div>
         ))}
       </div>
+
+      {/* Quick Edit Finished Clip Modal */}
+      <EditClipModal
+        clip={editingModalClip}
+        isOpen={!!editingModalClip}
+        onClose={() => setEditingModalClip(null)}
+        onSave={(updated) => {
+          onUpdateClip(updated);
+          setEditingModalClip(null);
+        }}
+        onOpenInStudio={(clipToEdit) => {
+          setEditingModalClip(null);
+          onEditClipInStudio(clipToEdit);
+        }}
+      />
 
       {/* Social Media Marketing Doc Modal */}
       <MarketingDocModal

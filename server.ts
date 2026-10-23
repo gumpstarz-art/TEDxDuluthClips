@@ -15,19 +15,6 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Require Passcode for all visitors
-app.use((req, res, next) => {
-  const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
-  const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
-
-  if (login === 'guest' && password === 'LSTED25rocks25!!') {
-    return next(); // Passcode correct, load the app
-  }
-
-  res.set('WWW-Authenticate', 'Basic realm="TEDxDuluth Clips"');
-  res.status(401).send('Authentication required.');
-});
-
 // Initialize Google GenAI
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = new GoogleGenAI({
@@ -53,20 +40,23 @@ const TEAM_CREDENTIALS = [
 
 // Auth Endpoint
 app.post('/api/auth/login', (req, res) => {
-  const { email, password, passcode, name, role } = req.body;
+  const { email, username, password, passcode, name, role } = req.body;
 
-  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanUser = (email || username || '').trim().toLowerCase();
   const cleanPassword = (password || '').trim();
 
   // 1. Check official shared team account: info@tedxduluth.com / LSTED25rocks25!!
-  if (cleanEmail === OFFICIAL_TEAM_EMAIL && cleanPassword === OFFICIAL_TEAM_PASSWORD) {
+  if (
+    (cleanUser === OFFICIAL_TEAM_EMAIL || cleanUser === 'info' || cleanUser === 'tedxduluth') &&
+    cleanPassword === OFFICIAL_TEAM_PASSWORD
+  ) {
     return res.json({
       success: true,
       token: `tedx_duluth_official_${Date.now()}`,
       user: {
-        name: name?.trim() || 'TEDxDuluth Team',
+        name: name?.trim() || 'TEDxDuluth Official',
         email: OFFICIAL_TEAM_EMAIL,
-        role: role || 'Duluth Team Admin & Socials',
+        role: role || 'Digital Media & Socials Admin',
         team: 'TEDxDuluth Digital Media',
         avatar: '🔴',
       },

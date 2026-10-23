@@ -31,6 +31,12 @@ import {
   HardDrive,
   AlertCircle,
   FileText,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  Save,
+  Edit3,
+  RefreshCw,
 } from 'lucide-react';
 import {
   TalkProject,
@@ -49,49 +55,75 @@ import { MarketingDocModal } from './MarketingDocModal';
 interface ClipStudioProps {
   project: TalkProject;
   activeClip: HighlightClip | null;
+  editingSavedClip?: SavedClip | null;
   onClipSaved: (savedClip: SavedClip) => void;
+  onClipUpdated?: (savedClip: SavedClip) => void;
+  onCancelEdit?: () => void;
   onNavigateToLibrary: () => void;
 }
 
 export const ClipStudio: React.FC<ClipStudioProps> = ({
   project,
   activeClip,
+  editingSavedClip,
   onClipSaved,
+  onClipUpdated,
+  onCancelEdit,
   onNavigateToLibrary,
 }) => {
   // Trim timestamps in seconds
-  const [startTime, setStartTime] = useState<number>(activeClip?.startTime ?? 0);
-  const [endTime, setEndTime] = useState<number>(activeClip?.endTime ?? Math.min(30, project.duration || 30));
-  const [currentTime, setCurrentTime] = useState<number>(activeClip?.startTime ?? 0);
+  const [startTime, setStartTime] = useState<number>(
+    editingSavedClip?.startTime ?? activeClip?.startTime ?? 0
+  );
+  const [endTime, setEndTime] = useState<number>(
+    editingSavedClip?.endTime ?? activeClip?.endTime ?? Math.min(30, project.duration || 30)
+  );
+  const [currentTime, setCurrentTime] = useState<number>(
+    editingSavedClip?.startTime ?? activeClip?.startTime ?? 0
+  );
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
 
   // Micro timing offset (in seconds) to shift captions forward or backward
-  const [syncOffset, setSyncOffset] = useState<number>(0);
+  const [syncOffset, setSyncOffset] = useState<number>(
+    editingSavedClip?.syncOffset ?? 0
+  );
 
   // Hook headline & caption
   const [hookTitle, setHookTitle] = useState<string>(
-    activeClip?.hookTitle || project.title || 'TEDxDuluth Key Highlight'
+    editingSavedClip?.title || activeClip?.hookTitle || project.title || 'TEDxDuluth Key Highlight'
   );
   const [socialCaption, setSocialCaption] = useState<string>(
-    activeClip?.socialCaption || `${project.speaker ? `${project.speaker} at ` : ''}TEDxDuluth #TEDxDuluth #IdeasWorthSpreading`
+    editingSavedClip?.socialCaption || activeClip?.socialCaption || `${project.speaker ? `${project.speaker} at ` : ''}TEDxDuluth #TEDxDuluth #IdeasWorthSpreading`
   );
 
   // Multi-platform Copy for LinkedIn, Facebook, and Instagram (Strict 5 hashtags max)
   const [socialCopies, setSocialCopies] = useState<SocialCopySet>(() => {
+    if (editingSavedClip?.socialCopies) return editingSavedClip.socialCopies;
     if (activeClip?.socialCopies) return activeClip.socialCopies;
     return generatePlatformCopies({
       talkTitle: project.title,
       speaker: project.speaker,
-      hookTitle: activeClip?.hookTitle || hookTitle,
+      hookTitle: editingSavedClip?.title || activeClip?.hookTitle || hookTitle,
       summary: activeClip?.summary || project.summary,
     });
   });
   const [activeSocialPlatform, setActiveSocialPlatform] = useState<'instagram' | 'linkedin' | 'facebook'>('instagram');
   const [copiedSocialPost, setCopiedSocialPost] = useState(false);
+  const [savedDetailsToast, setSavedDetailsToast] = useState(false);
 
   // Subtitles
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>(() => {
+    if (editingSavedClip?.subtitles && editingSavedClip.subtitles.length > 0) {
+      return editingSavedClip.subtitles.map((sub, i) => ({
+        id: sub.id || `sub-${i}-${Date.now()}`,
+        start: sub.start,
+        end: sub.end,
+        videoStart: sub.videoStart !== undefined ? sub.videoStart : (editingSavedClip.startTime + sub.start),
+        videoEnd: sub.videoEnd !== undefined ? sub.videoEnd : (editingSavedClip.startTime + sub.end),
+        text: sub.text,
+      }));
+    }
     if (activeClip?.subtitles && activeClip.subtitles.length > 0) {
       return activeClip.subtitles.map((sub, i) => ({
         id: `sub-${i}-${Date.now()}`,
@@ -132,27 +164,33 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
   });
 
   // Subtitle styling - TED Classic and TED Red exclusively with Helvetica
-  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>({
-    preset: 'ted-classic',
-    fontVariant: 'helvetica-bold',
-    fontSize: 34,
-    positionY: 82, // Moved down so text doesn't cut off speaker's feet
-    textTransform: 'none',
-    highlightColor: '#ffffff',
-    showBackgroundBox: true,
-    boxColor: 'rgba(12, 14, 20, 0.88)',
+  const [subtitleStyle, setSubtitleStyle] = useState<SubtitleStyle>(() => {
+    if (editingSavedClip?.subtitleStyle) return editingSavedClip.subtitleStyle;
+    return {
+      preset: (editingSavedClip?.subtitlePreset as any) || 'ted-classic',
+      fontVariant: 'helvetica-bold',
+      fontSize: 34,
+      positionY: 82, // Moved down so text doesn't cut off speaker's feet
+      textTransform: 'none',
+      highlightColor: '#ffffff',
+      showBackgroundBox: true,
+      boxColor: 'rgba(12, 14, 20, 0.88)',
+    };
   });
 
   // Video settings & Layout: Blurred Fit & Center Crop only; logo default off & bottom corner
-  const [videoSettings, setVideoSettings] = useState<VideoSettings>({
-    aspectRatio: '9:16',
-    layout: 'blurred-fit',
-    showTedLogo: false, // Default off as requested
-    logoPosition: 'bottom-right', // Bottom corner as requested
-    showHeadline: true,
-    customHeadline: hookTitle,
-    showProgressBar: true,
-    resolution: '720x1280',
+  const [videoSettings, setVideoSettings] = useState<VideoSettings>(() => {
+    if (editingSavedClip?.videoSettings) return editingSavedClip.videoSettings;
+    return {
+      aspectRatio: '9:16',
+      layout: (editingSavedClip?.layout as any) || 'blurred-fit',
+      showTedLogo: false, // Default off as requested
+      logoPosition: 'bottom-right', // Bottom corner as requested
+      showHeadline: true,
+      customHeadline: editingSavedClip?.title || activeClip?.hookTitle || hookTitle,
+      showProgressBar: true,
+      resolution: '720x1280',
+    };
   });
 
   // Rendering state
@@ -161,6 +199,8 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
   const [renderStatus, setRenderStatus] = useState('');
   const [isAligning, setIsAligning] = useState(false);
   const [isMarketingDocOpen, setIsMarketingDocOpen] = useState(false);
+  const [timelineZoom, setTimelineZoom] = useState<'clip' | '2x' | '4x' | 'full'>('clip');
+  const [selectedSubIndex, setSelectedSubIndex] = useState<number | null>(null);
 
   // Active tab in sidebar
   const [sidebarTab, setSidebarTab] = useState<'trim' | 'subtitles' | 'brand' | 'caption'>('trim');
@@ -207,6 +247,48 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
       }));
     }
   }, [activeClip]);
+
+  // Sync state if editingSavedClip changes
+  useEffect(() => {
+    if (editingSavedClip) {
+      setStartTime(editingSavedClip.startTime);
+      setEndTime(editingSavedClip.endTime);
+      setCurrentTime(editingSavedClip.startTime);
+      setHookTitle(editingSavedClip.title);
+      setSocialCaption(editingSavedClip.socialCaption);
+      setSyncOffset(editingSavedClip.syncOffset || 0);
+
+      if (editingSavedClip.socialCopies) {
+        setSocialCopies(editingSavedClip.socialCopies);
+      }
+
+      if (editingSavedClip.subtitles && editingSavedClip.subtitles.length > 0) {
+        setSubtitles(
+          editingSavedClip.subtitles.map((sub, i) => ({
+            id: sub.id || `sub-${i}-${Date.now()}`,
+            start: sub.start,
+            end: sub.end,
+            videoStart: sub.videoStart !== undefined ? sub.videoStart : editingSavedClip.startTime + sub.start,
+            videoEnd: sub.videoEnd !== undefined ? sub.videoEnd : editingSavedClip.startTime + sub.end,
+            text: sub.text,
+          }))
+        );
+      }
+
+      if (editingSavedClip.subtitleStyle) {
+        setSubtitleStyle(editingSavedClip.subtitleStyle);
+      }
+
+      if (editingSavedClip.videoSettings) {
+        setVideoSettings(editingSavedClip.videoSettings);
+      } else {
+        setVideoSettings((prev) => ({
+          ...prev,
+          customHeadline: editingSavedClip.title,
+        }));
+      }
+    }
+  }, [editingSavedClip]);
 
   // Video timeupdate handler with precision looping
   const handleTimeUpdate = () => {
@@ -746,8 +828,29 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
     setSubtitles((prev) => prev.filter((_, idx) => idx !== index));
   };
 
-  // Render & Export Video
-  const handleRenderVideo = async () => {
+  // Quick-save subtitle text, hook title, and copy changes directly to existing finished clip without re-rendering
+  const handleQuickSaveDetails = () => {
+    if (!editingSavedClip || !onClipUpdated) return;
+    const updated: SavedClip = {
+      ...editingSavedClip,
+      title: hookTitle,
+      socialCaption: socialCopies[activeSocialPlatform] || socialCaption,
+      socialCopies: socialCopies,
+      subtitles: subtitles,
+      syncOffset: syncOffset,
+      subtitleStyle: subtitleStyle,
+      videoSettings: videoSettings,
+      startTime: startTime,
+      endTime: endTime,
+      duration: Math.round(duration),
+    };
+    onClipUpdated(updated);
+    setSavedDetailsToast(true);
+    setTimeout(() => setSavedDetailsToast(false), 2500);
+  };
+
+  // Render & Export Video (support updating finished clip or saving as new)
+  const handleRenderVideo = async (exportMode: 'update' | 'new' = 'update') => {
     if (!videoRef.current) return;
     setIsRendering(true);
     setRenderProgress(0);
@@ -773,9 +876,9 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         },
       });
 
-      // Create a SavedClip record with multi-platform copy (LinkedIn, Facebook, Instagram)
+      const isUpdating = editingSavedClip && exportMode === 'update';
       const saved: SavedClip = {
-        id: `clip-${Date.now()}`,
+        id: isUpdating ? editingSavedClip.id : `clip-${Date.now()}`,
         title: hookTitle,
         talkTitle: project.title,
         speaker: project.speaker,
@@ -785,14 +888,23 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         videoBlobUrl: result.url,
         socialCaption: socialCopies[activeSocialPlatform] || socialCaption,
         socialCopies: socialCopies,
-        platform: 'All',
+        platform: editingSavedClip?.platform || 'All',
         status: 'Ready',
-        createdAt: new Date().toISOString(),
+        createdAt: isUpdating ? editingSavedClip.createdAt : new Date().toISOString(),
         subtitlePreset: subtitleStyle.preset,
         layout: videoSettings.layout,
+        subtitles: subtitles,
+        syncOffset: syncOffset,
+        subtitleStyle: subtitleStyle,
+        videoSettings: videoSettings,
+        talkProjectId: project.id,
       };
 
-      onClipSaved(saved);
+      if (isUpdating && onClipUpdated) {
+        onClipUpdated(saved);
+      } else {
+        onClipSaved(saved);
+      }
 
       // Trigger automatic file download
       const a = document.createElement('a');
@@ -831,12 +943,59 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         className="hidden"
       />
 
+      {/* Editing Finished Clip Mode Banner */}
+      {editingSavedClip && (
+        <div className="mb-5 p-4 rounded-2xl bg-[#1c1815] border border-amber-500/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-lg shadow-black/40">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center border border-amber-500/30 shrink-0">
+              <Sliders className="w-5 h-5 text-amber-400" />
+            </div>
+            <div>
+              <div className="font-bold text-amber-200 flex items-center gap-2">
+                <span>Editing Finished Clip:</span>
+                <span className="text-white font-extrabold">"{editingSavedClip.title}"</span>
+              </div>
+              <p className="text-[11px] text-amber-300/80">
+                {editingSavedClip.speaker} • {editingSavedClip.duration}s • Re-trimmed timestamps & edited subtitles can update this clip or be saved as a new version.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <button
+              type="button"
+              onClick={handleQuickSaveDetails}
+              className="px-3 py-1.5 rounded-xl bg-[#252b40] hover:bg-[#313955] text-amber-300 border border-amber-500/40 text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+              title="Save text and timing changes directly back to library without re-rendering"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Save Details</span>
+            </button>
+            {onCancelEdit && (
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition cursor-pointer"
+              >
+                Exit Edit Mode
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onNavigateToLibrary}
+              className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold transition cursor-pointer"
+            >
+              Saved Library
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Studio Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-[#eb0028] mb-1">
             <span className="w-2 h-2 rounded-full bg-[#eb0028] animate-pulse" />
-            TEDxDuluth Studio • Precise Audio & Caption Timing
+            {editingSavedClip ? 'TEDxDuluth Studio • Editing Finished Clip' : 'TEDxDuluth Studio • Precise Audio & Caption Timing'}
           </div>
           <h2 className="text-2xl font-black text-white tracking-tight flex items-center gap-2">
             <span>"{hookTitle}"</span>
@@ -846,7 +1005,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => setIsMarketingDocOpen(true)}
@@ -864,23 +1023,56 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
           >
             View Saved Library
           </button>
-          <button
-            onClick={handleRenderVideo}
-            disabled={isRendering}
-            className="px-5 py-2.5 rounded-xl bg-[#eb0028] hover:bg-[#d40024] active:scale-[0.99] text-white text-xs font-black flex items-center gap-2 transition shadow-lg shadow-[#eb0028]/25 cursor-pointer disabled:opacity-50"
-          >
-            {isRendering ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Rendering...
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                Render & Download 9:16 Video
-              </>
-            )}
-          </button>
+
+          {editingSavedClip ? (
+            <>
+              <button
+                onClick={() => handleRenderVideo('update')}
+                disabled={isRendering}
+                className="px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 active:scale-[0.99] text-white text-xs font-black flex items-center gap-1.5 transition shadow-lg shadow-amber-600/25 cursor-pointer disabled:opacity-50"
+                title="Update this finished clip in library with new video & timing"
+              >
+                {isRendering ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    Update Finished Clip
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => handleRenderVideo('new')}
+                disabled={isRendering}
+                className="px-3.5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold flex items-center gap-1.5 transition border border-neutral-700 cursor-pointer disabled:opacity-50"
+                title="Save as a brand new clip in library"
+              >
+                <Plus className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Save New</span>
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => handleRenderVideo('new')}
+              disabled={isRendering}
+              className="px-5 py-2.5 rounded-xl bg-[#eb0028] hover:bg-[#d40024] active:scale-[0.99] text-white text-xs font-black flex items-center gap-2 transition shadow-lg shadow-[#eb0028]/25 cursor-pointer disabled:opacity-50"
+            >
+              {isRendering ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Rendering...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Render & Download 9:16 Video
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -955,12 +1147,406 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         </div>
 
         {/* Right: Studio Controls (Timeline Trimmer, Visual Waveform Track, Subtitle Sync, Branding) */}
-        <div className="lg:col-span-7 bg-[#13151f] border border-neutral-800 rounded-2xl p-5 space-y-5">
+        <div className="lg:col-span-7 bg-[#13151f] border border-neutral-800 rounded-2xl p-5 space-y-4">
+          
+          {/* ZOOMED INTERACTIVE VIDEO & SUBTITLE TIMELINE EDITOR */}
+          <div className="p-4 rounded-2xl bg-[#0b0d14] border border-neutral-800 space-y-3 shadow-inner">
+            {/* Timeline Header: Title + Time Info + Zoom Switcher */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-neutral-800/80">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#eb0028] animate-pulse" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-white">
+                    Interactive Video & Subtitle Track
+                  </span>
+                  <span className="px-1.5 py-0.2 rounded bg-neutral-800 border border-neutral-700 text-[10px] font-mono text-neutral-300">
+                    {timelineZoom === 'full' ? 'Overview' : `${timelineZoom.toUpperCase()} Zoom`}
+                  </span>
+                </div>
+                <div className="text-[11px] font-mono text-neutral-400 mt-0.5">
+                  Clip: <strong className="text-white">{startTime.toFixed(1)}s</strong> → <strong className="text-white">{endTime.toFixed(1)}s</strong> ({duration.toFixed(1)}s) • Playhead: <span className="text-yellow-400 font-bold">{currentTime.toFixed(1)}s</span>
+                </div>
+              </div>
+
+              {/* Zoom Buttons: Fit Clip (1x), 2x, 4x, Full Talk */}
+              <div className="flex items-center gap-1 bg-[#171a25] p-1 rounded-xl border border-neutral-800 text-xs shrink-0">
+                <span className="text-[10px] text-neutral-400 px-1 font-semibold">Zoom:</span>
+                <button
+                  type="button"
+                  onClick={() => setTimelineZoom('clip')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    timelineZoom === 'clip'
+                      ? 'bg-[#eb0028] text-white shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Fit active clip in view (Recommended for editing)"
+                >
+                  Fit Clip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineZoom('2x')}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-0.5 cursor-pointer ${
+                    timelineZoom === '2x'
+                      ? 'bg-[#eb0028] text-white shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Zoom in 2x for word-level precision"
+                >
+                  <ZoomIn className="w-3 h-3" />
+                  2x
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineZoom('4x')}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-0.5 cursor-pointer ${
+                    timelineZoom === '4x'
+                      ? 'bg-[#eb0028] text-white shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="Zoom in 4x for micro split-second timing"
+                >
+                  <ZoomIn className="w-3 h-3" />
+                  4x
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTimelineZoom('full')}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    timelineZoom === 'full'
+                      ? 'bg-[#eb0028] text-white shadow'
+                      : 'text-neutral-400 hover:text-white'
+                  }`}
+                  title="View full talk overview"
+                >
+                  Talk
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Track Container */}
+            <div className="overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-neutral-700">
+              <div
+                style={{ width: `${timelineZoom === '4x' ? 400 : timelineZoom === '2x' ? 200 : 100}%` }}
+                className="relative select-none min-w-[480px]"
+              >
+                {/* 1. Time Ruler Marks */}
+                <div className="relative h-4 mb-1 text-[9px] font-mono text-neutral-500 border-b border-neutral-800">
+                  {Array.from({ length: 7 }).map((_, i) => {
+                    const pct = (i / 6) * 100;
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = isFull ? totalVideoDuration : duration;
+                    const markTime = winStart + (winDur * i) / 6;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute -translate-x-1/2 flex flex-col items-center"
+                        style={{ left: `${pct}%` }}
+                      >
+                        <span>{isFull ? formatSecs(markTime) : `+${((winDur * i) / 6).toFixed(1)}s`}</span>
+                        <div className="w-px h-1.5 bg-neutral-700" />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* 2. Interactive Video Scrub Track */}
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = isFull ? totalVideoDuration : duration;
+                    handleSeek(winStart + ratio * winDur);
+                  }}
+                  className="relative h-6 bg-neutral-900 rounded-lg overflow-hidden border border-neutral-700/80 cursor-pointer shadow-inner mb-2"
+                >
+                  <div className="absolute inset-0 opacity-15 bg-[repeating-linear-gradient(45deg,#444,#444_10px,#222_10px,#222_20px)]" />
+
+                  {/* Highlight clip window when in Full Talk mode */}
+                  {timelineZoom === 'full' && (
+                    <div
+                      className="absolute top-0 bottom-0 bg-[#eb0028]/35 border-x-2 border-[#eb0028] flex items-center justify-between px-1.5 pointer-events-none"
+                      style={{
+                        left: `${(startTime / totalVideoDuration) * 100}%`,
+                        width: `${(duration / totalVideoDuration) * 100}%`,
+                      }}
+                    >
+                      <span className="text-[9px] font-mono text-white font-bold bg-[#eb0028] px-1 rounded">
+                        IN
+                      </span>
+                      <span className="text-[9px] font-mono text-white font-bold bg-[#eb0028] px-1 rounded">
+                        OUT
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Playhead marker in video track */}
+                  {(() => {
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = Math.max(0.5, isFull ? totalVideoDuration : duration);
+                    const playheadPct = Math.max(0, Math.min(100, ((currentTime - winStart) / winDur) * 100));
+                    return (
+                      <div
+                        className="absolute top-0 bottom-0 w-1 bg-yellow-400 z-30 pointer-events-none"
+                        style={{ left: `${playheadPct}%` }}
+                      >
+                        <div className="w-3 h-3 -ml-1 -top-1 rounded-full bg-yellow-400 shadow-md border border-black/40" />
+                      </div>
+                    );
+                  })()}
+
+                  <div className="absolute inset-0 flex items-center justify-center text-[10px] text-neutral-400 pointer-events-none font-semibold">
+                    Click to scrub video • {formatSecs(currentTime)}
+                  </div>
+                </div>
+
+                {/* 3. Dedicated Subtitles Track (Zoomed, Taller & Clickable) */}
+                <div
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = isFull ? totalVideoDuration : duration;
+                    handleSeek(winStart + ratio * winDur);
+                  }}
+                  className="relative h-11 bg-[#0a0c12] rounded-xl border border-neutral-700/70 p-1 cursor-pointer overflow-hidden shadow-inner"
+                >
+                  {/* Subtle track guide lines */}
+                  <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none" />
+
+                  {/* Subtitle blocks along track */}
+                  {subtitles.map((sub, i) => {
+                    const vStart = sub.videoStart !== undefined ? sub.videoStart : startTime + sub.start;
+                    const vEnd = sub.videoEnd !== undefined ? sub.videoEnd : startTime + sub.end;
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = Math.max(0.5, isFull ? totalVideoDuration : duration);
+
+                    // Skip if outside zoom window
+                    if (vEnd < winStart || vStart > (winStart + winDur)) return null;
+
+                    const leftPct = Math.max(0, Math.min(100, ((vStart - winStart) / winDur) * 100));
+                    const rightPct = Math.max(0, Math.min(100, ((vEnd - winStart) / winDur) * 100));
+                    const widthPct = Math.max(2, rightPct - leftPct);
+
+                    const isPlaying = currentTime >= (vStart + syncOffset) && currentTime <= (vEnd + syncOffset);
+                    const isSelected = selectedSubIndex === i;
+
+                    return (
+                      <div
+                        key={sub.id || i}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSubIndex(i);
+                          handleSeek(vStart);
+                        }}
+                        title={`Line ${i + 1}: "${sub.text}" (${vStart.toFixed(1)}s → ${vEnd.toFixed(1)}s)`}
+                        className={`absolute top-1 bottom-1 rounded-lg px-2 flex items-center justify-between transition-all border text-xs cursor-pointer select-none ${
+                          isSelected
+                            ? 'bg-[#eb0028] text-white border-white z-20 ring-2 ring-white/60 shadow-lg shadow-[#eb0028]/30 font-bold'
+                            : isPlaying
+                            ? 'bg-[#ffde00] text-black border-yellow-200 font-extrabold z-10 scale-[1.02] shadow-md'
+                            : 'bg-[#1b1f2e] hover:bg-[#252b3e] text-neutral-200 border-neutral-600/60 hover:border-neutral-400'
+                        }`}
+                        style={{
+                          left: `${leftPct}%`,
+                          width: `${widthPct}%`,
+                        }}
+                      >
+                        <div className="flex items-center gap-1.5 overflow-hidden truncate">
+                          <span
+                            className={`px-1 py-0.2 rounded text-[9px] font-bold shrink-0 ${
+                              isSelected
+                                ? 'bg-black/40 text-white'
+                                : isPlaying
+                                ? 'bg-black text-yellow-300'
+                                : 'bg-neutral-800 text-neutral-300'
+                            }`}
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="truncate text-[11px]">{sub.text}</span>
+                        </div>
+                        <span className="text-[9px] opacity-75 font-mono shrink-0 ml-1.5 hidden sm:inline">
+                          {(vEnd - vStart).toFixed(1)}s
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {/* Playhead needle extending down across subtitle track */}
+                  {(() => {
+                    const isFull = timelineZoom === 'full';
+                    const winStart = isFull ? 0 : startTime;
+                    const winDur = Math.max(0.5, isFull ? totalVideoDuration : duration);
+                    const playheadPct = Math.max(0, Math.min(100, ((currentTime - winStart) / winDur) * 100));
+                    return (
+                      <div
+                        className="absolute top-0 bottom-0 w-1 bg-yellow-400 z-30 pointer-events-none"
+                        style={{ left: `${playheadPct}%` }}
+                      />
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Quick-Edit Subtitle Box (For Selected or Active Subtitle) */}
+            {(() => {
+              const activeIdx = selectedSubIndex !== null
+                ? selectedSubIndex
+                : subtitles.findIndex((s) => {
+                    const vs = s.videoStart !== undefined ? s.videoStart : startTime + s.start;
+                    const ve = s.videoEnd !== undefined ? s.videoEnd : startTime + s.end;
+                    return currentTime >= (vs + syncOffset) && currentTime <= (ve + syncOffset);
+                  });
+
+              const targetSub = activeIdx >= 0 ? subtitles[activeIdx] : null;
+              if (!targetSub) {
+                return (
+                  <div className="p-2.5 rounded-xl bg-[#141722] border border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                    <span>Click any subtitle block above to inspect, adjust timing, and edit text.</span>
+                    <button
+                      type="button"
+                      onClick={addSubtitleLine}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-[11px] font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3 text-[#eb0028]" />
+                      Add Subtitle
+                    </button>
+                  </div>
+                );
+              }
+
+              const vStart = targetSub.videoStart !== undefined ? targetSub.videoStart : startTime + targetSub.start;
+              const vEnd = targetSub.videoEnd !== undefined ? targetSub.videoEnd : startTime + targetSub.end;
+
+              return (
+                <div className="p-3.5 rounded-xl bg-[#151824] border border-neutral-700 space-y-2.5 shadow-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-[#eb0028] text-white text-[10px] font-bold uppercase tracking-wider">
+                        Selected Line {activeIdx + 1}
+                      </span>
+                      <span className="text-xs text-neutral-300 font-mono">
+                        {vStart.toFixed(1)}s → {vEnd.toFixed(1)}s ({(vEnd - vStart).toFixed(1)}s)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleSeek(vStart)}
+                        className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Play className="w-3 h-3 text-[#eb0028]" />
+                        Play Line
+                      </button>
+                      <button
+                        type="button"
+                        onClick={addSubtitleLine}
+                        className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs text-neutral-300 flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3 text-emerald-400" />
+                        Add Line
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Subtitle text live editing */}
+                  <input
+                    type="text"
+                    value={targetSub.text}
+                    onChange={(e) => updateSubtitle(activeIdx, { text: e.target.value })}
+                    placeholder="Type spoken sentence here..."
+                    className="w-full bg-[#0d0f17] border border-neutral-700 focus:border-[#eb0028] rounded-xl px-3 py-2 text-xs text-white"
+                  />
+
+                  {/* Precision timing adjustment & Snap buttons */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[11px] text-neutral-400 font-semibold mr-1">Start:</span>
+                      <button
+                        type="button"
+                        onClick={() => nudgeSubtitleLine(activeIdx, -0.2)}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-[11px] font-mono text-neutral-300 cursor-pointer"
+                        title="Shift start 0.2s earlier"
+                      >
+                        -0.2s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeSubtitleLine(activeIdx, -0.1)}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-[11px] font-mono text-neutral-300 cursor-pointer"
+                        title="Shift start 0.1s earlier"
+                      >
+                        -0.1s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeSubtitleLine(activeIdx, 0.1)}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-[11px] font-mono text-neutral-300 cursor-pointer"
+                        title="Shift start 0.1s later"
+                      >
+                        +0.1s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nudgeSubtitleLine(activeIdx, 0.2)}
+                        className="px-2 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-[11px] font-mono text-neutral-300 cursor-pointer"
+                        title="Shift start 0.2s later"
+                      >
+                        +0.2s
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSnapSubStart(activeIdx)}
+                        className="px-2 py-1 rounded bg-[#eb0028]/15 hover:bg-[#eb0028]/25 text-[#eb0028] border border-[#eb0028]/30 text-[10px] font-bold flex items-center gap-1 ml-1 cursor-pointer"
+                        title="Set start time to current video playhead"
+                      >
+                        <Target className="w-3 h-3" />
+                        Snap Start ({currentTime.toFixed(1)}s)
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSnapSubEnd(activeIdx)}
+                        className="px-2 py-1 rounded bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 border border-blue-500/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                        title="Set end time to current video playhead"
+                      >
+                        <Target className="w-3 h-3" />
+                        Snap End ({currentTime.toFixed(1)}s)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          removeSubtitleLine(activeIdx);
+                          setSelectedSubIndex(null);
+                        }}
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-neutral-800 transition ml-2 cursor-pointer"
+                        title="Delete line"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
           {/* Tab Switcher */}
           <div className="flex items-center gap-1.5 p-1 bg-[#181b26] rounded-xl border border-neutral-800 overflow-x-auto">
             <button
               onClick={() => setSidebarTab('trim')}
-              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 sidebarTab === 'trim'
                   ? 'bg-[#eb0028] text-white shadow-md shadow-[#eb0028]/25'
                   : 'text-neutral-400 hover:text-white'
@@ -972,7 +1558,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
 
             <button
               onClick={() => setSidebarTab('subtitles')}
-              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 sidebarTab === 'subtitles'
                   ? 'bg-[#eb0028] text-white shadow-md shadow-[#eb0028]/25'
                   : 'text-neutral-400 hover:text-white'
@@ -984,7 +1570,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
 
             <button
               onClick={() => setSidebarTab('brand')}
-              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 sidebarTab === 'brand'
                   ? 'bg-[#eb0028] text-white shadow-md shadow-[#eb0028]/25'
                   : 'text-neutral-400 hover:text-white'
@@ -996,7 +1582,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
 
             <button
               onClick={() => setSidebarTab('caption')}
-              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 min-w-[90px] py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 sidebarTab === 'caption'
                   ? 'bg-[#eb0028] text-white shadow-md shadow-[#eb0028]/25'
                   : 'text-neutral-400 hover:text-white'
@@ -1022,7 +1608,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
                 <button
                   onClick={handleAutoAlignSubtitles}
                   disabled={isAligning}
-                  className="px-3 py-1.5 rounded-lg bg-[#eb0028]/15 hover:bg-[#eb0028]/25 text-[#eb0028] border border-[#eb0028]/30 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg bg-[#eb0028]/15 hover:bg-[#eb0028]/25 text-[#eb0028] border border-[#eb0028]/30 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
                   title="Auto-extract and align subtitles spoken within this exact trimmed window"
                 >
                   {isAligning ? (
@@ -1033,96 +1619,6 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
                   Re-Align to Trim Window
                 </button>
               </div>
-
-              {/* Visual Multi-Track Scrubber (Video + Subtitle Blocks) */}
-              <div className="p-4 rounded-xl bg-[#0f1118] border border-neutral-800 space-y-3">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 flex items-center justify-between">
-                  <span>Interactive Video & Subtitle Track</span>
-                  <span className="font-mono text-neutral-300">
-                    Clip: {startTime.toFixed(1)}s → {endTime.toFixed(1)}s ({duration.toFixed(1)}s)
-                  </span>
-                </div>
-
-                {/* Master Track */}
-                <div className="relative h-12 bg-neutral-900 rounded-lg overflow-hidden border border-neutral-700/60 select-none">
-                  {/* Talk full background */}
-                  <div className="absolute inset-0 opacity-20 bg-[repeating-linear-gradient(45deg,#333,#333_10px,#222_10px,#222_20px)]" />
-
-                  {/* Selected Clip Highlight Window */}
-                  <div
-                    className="absolute top-0 bottom-0 bg-[#eb0028]/30 border-x-2 border-[#eb0028] flex items-center justify-between px-2"
-                    style={{
-                      left: `${(startTime / totalVideoDuration) * 100}%`,
-                      width: `${((endTime - startTime) / totalVideoDuration) * 100}%`,
-                    }}
-                  >
-                    <span className="text-[10px] font-mono text-white font-bold bg-[#eb0028] px-1 rounded shadow">
-                      IN: {startTime.toFixed(1)}s
-                    </span>
-                    <span className="text-[10px] font-mono text-white font-bold bg-[#eb0028] px-1 rounded shadow">
-                      OUT: {endTime.toFixed(1)}s
-                    </span>
-                  </div>
-
-                  {/* Subtitle Blocks Along Track */}
-                  {subtitles.map((sub, i) => {
-                    const vStart = sub.videoStart !== undefined ? sub.videoStart : startTime + sub.start;
-                    const vEnd = sub.videoEnd !== undefined ? sub.videoEnd : startTime + sub.end;
-                    const leftPct = (vStart / totalVideoDuration) * 100;
-                    const widthPct = Math.max(1, ((vEnd - vStart) / totalVideoDuration) * 100);
-                    const isActive = currentTime >= vStart && currentTime <= vEnd;
-
-                    return (
-                      <div
-                        key={sub.id || i}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSeek(vStart);
-                        }}
-                        title={`Line ${i + 1}: "${sub.text}" (${vStart.toFixed(1)}s - ${vEnd.toFixed(1)}s)`}
-                        className={`absolute top-2.5 h-6 rounded px-1 flex items-center cursor-pointer transition-all text-[9px] font-bold overflow-hidden truncate ${
-                          isActive
-                            ? 'bg-[#ffde00] text-black ring-2 ring-white z-20 scale-105'
-                            : 'bg-emerald-500/80 text-white hover:bg-emerald-400 z-10'
-                        }`}
-                        style={{
-                          left: `${leftPct}%`,
-                          width: `${widthPct}%`,
-                        }}
-                      >
-                        <span className="truncate">{i + 1}. {sub.text}</span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Playhead Marker */}
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-yellow-400 z-30 pointer-events-none"
-                    style={{
-                      left: `${(currentTime / totalVideoDuration) * 100}%`,
-                    }}
-                  >
-                    <div className="w-2.5 h-2.5 -ml-1 rounded-full bg-yellow-400 shadow-md" />
-                  </div>
-                </div>
-
-                {/* Scrubber slider */}
-                <div className="pt-1">
-                  <input
-                    type="range"
-                    min={0}
-                    max={totalVideoDuration}
-                    step={0.1}
-                    value={currentTime}
-                    onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                    className="w-full cursor-pointer h-2 bg-neutral-700 rounded-lg appearance-none"
-                  />
-                  <div className="flex justify-between text-[10px] text-neutral-500 mt-0.5 font-mono">
-                    <span>00:00</span>
-                    <span>Playhead: {formatSecs(currentTime)}</span>
-                    <span>{formatSecs(totalVideoDuration)}</span>
-                  </div>
-                </div>
 
                 {/* GLOBAL CAPTION TIMING NUDGE / SYNC OFFSET TOOL */}
                 <div className="mt-3 p-3 rounded-xl bg-[#151824] border border-neutral-700/80 space-y-2">
@@ -1276,7 +1772,6 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
                   </div>
                 </div>
               </div>
-            </div>
           )}
 
           {/* TAB 2: BURNED-IN SUBTITLES STUDIO & LINE-BY-LINE TIMING */}
@@ -1850,10 +2345,32 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
                   ))}
                 </div>
               </div>
+
+              {/* Quick Save Details directly to Library without re-rendering */}
+              {editingSavedClip && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleQuickSaveDetails}
+                    className="w-full py-2.5 px-4 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer shadow-sm"
+                  >
+                    <Save className="w-4 h-4 text-amber-400" />
+                    <span>Save Caption Changes to Finished Clip (No Re-Render)</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* Details Saved Toast */}
+      {savedDetailsToast && (
+        <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-2xl bg-emerald-950 border border-emerald-500/60 text-emerald-200 text-xs font-bold flex items-center gap-2.5 shadow-2xl animate-bounce">
+          <Check className="w-4 h-4 text-emerald-400" />
+          <span>Finished Clip details successfully updated in Library!</span>
+        </div>
+      )}
 
       {/* RENDER PROGRESS MODAL */}
       {isRendering && (

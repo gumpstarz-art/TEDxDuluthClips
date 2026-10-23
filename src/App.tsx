@@ -13,7 +13,6 @@ import { SavedLibrary } from './components/SavedLibrary';
 import { PublishModal } from './components/PublishModal';
 import { TeamMember, TalkProject, HighlightClip, SavedClip } from './types';
 import { UploadCloud, Scissors } from 'lucide-react';
-import { googleSignOut } from './services/googleDrive';
 
 export default function App() {
   // Authentication state
@@ -35,6 +34,9 @@ export default function App() {
   // Active clip currently loaded in Clip Studio
   const [activeClip, setActiveClip] = useState<HighlightClip | null>(null);
 
+  // Finished clip currently loaded for re-editing in Clip Studio
+  const [editingSavedClip, setEditingSavedClip] = useState<SavedClip | null>(null);
+
   // Saved Clips Library (persisted in localStorage)
   const [savedClips, setSavedClips] = useState<SavedClip[]>(() => {
     try {
@@ -53,12 +55,9 @@ export default function App() {
     localStorage.setItem('tedx_duluth_member', JSON.stringify(member));
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     setTeamMember(null);
     localStorage.removeItem('tedx_duluth_member');
-    try {
-      await googleSignOut();
-    } catch {}
   };
 
   // Persist saved clips
@@ -68,6 +67,18 @@ export default function App() {
       localStorage.setItem('tedx_duluth_saved_clips', JSON.stringify(updated));
       return updated;
     });
+    setEditingSavedClip(null);
+  };
+
+  const handleUpdateClip = (updatedClip: SavedClip) => {
+    setSavedClips((prev) => {
+      const updated = prev.map((c) => (c.id === updatedClip.id ? updatedClip : c));
+      localStorage.setItem('tedx_duluth_saved_clips', JSON.stringify(updated));
+      return updated;
+    });
+    if (editingSavedClip?.id === updatedClip.id) {
+      setEditingSavedClip(updatedClip);
+    }
   };
 
   const handleDeleteClip = (id: string) => {
@@ -76,6 +87,9 @@ export default function App() {
       localStorage.setItem('tedx_duluth_saved_clips', JSON.stringify(updated));
       return updated;
     });
+    if (editingSavedClip?.id === id) {
+      setEditingSavedClip(null);
+    }
   };
 
   const handleUpdateStatus = (id: string, status: 'Ready' | 'Scheduled' | 'Published') => {
@@ -88,12 +102,54 @@ export default function App() {
 
   // Switch to clip studio for a selected highlight
   const handleSelectHighlightForEdit = (clip: HighlightClip) => {
+    setEditingSavedClip(null);
     setActiveClip(clip);
+    setActiveTab('studio');
+  };
+
+  // Re-edit finished clip in Clip Studio
+  const handleEditSavedClipInStudio = (clip: SavedClip) => {
+    setEditingSavedClip(clip);
+
+    // If currentProject doesn't exist or is for a different talk, reconstruct/adapt project
+    if (!currentProject || currentProject.title !== clip.talkTitle) {
+      const fallbackProject: TalkProject = {
+        id: clip.talkProjectId || `project-${clip.id}`,
+        title: clip.talkTitle,
+        speaker: clip.speaker,
+        event: 'TEDxDuluth',
+        videoUrl: clip.videoBlobUrl || '',
+        duration: Math.max(clip.duration + clip.startTime, 60),
+        transcript: clip.subtitles?.map((s) => s.text).join('\n') || '',
+        highlights: [],
+        createdAt: clip.createdAt,
+      };
+      setCurrentProject(fallbackProject);
+    }
+
+    // Convert SavedClip to HighlightClip structure for activeClip
+    const clipAsHighlight: HighlightClip = {
+      id: clip.id,
+      hookTitle: clip.title,
+      summary: clip.talkTitle,
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      duration: clip.duration,
+      viralityScore: 95,
+      hookFactor: 'Saved Finished Clip',
+      bestPlatform: clip.platform === 'All' ? 'Instagram Reels' : (clip.platform as any),
+      subtitles: clip.subtitles || [],
+      socialCaption: clip.socialCaption,
+      socialCopies: clip.socialCopies,
+    };
+
+    setActiveClip(clipAsHighlight);
     setActiveTab('studio');
   };
 
   // Talk loaded from ingest
   const handleTalkLoaded = (talk: TalkProject) => {
+    setEditingSavedClip(null);
     setCurrentProject(talk);
     if (talk.highlights && talk.highlights.length > 0) {
       setActiveClip(talk.highlights[0]);
@@ -159,7 +215,10 @@ export default function App() {
             <ClipStudio
               project={currentProject}
               activeClip={activeClip}
+              editingSavedClip={editingSavedClip}
               onClipSaved={handleSaveClip}
+              onClipUpdated={handleUpdateClip}
+              onCancelEdit={() => setEditingSavedClip(null)}
               onNavigateToLibrary={() => setActiveTab('library')}
             />
           ) : (
@@ -187,6 +246,8 @@ export default function App() {
             onDeleteClip={handleDeleteClip}
             onUpdateStatus={handleUpdateStatus}
             onSelectForPublish={(clip) => setPublishingClip(clip)}
+            onEditClipInStudio={handleEditSavedClipInStudio}
+            onUpdateClip={handleUpdateClip}
           />
         )}
       </main>
