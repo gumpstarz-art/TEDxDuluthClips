@@ -1,16 +1,9 @@
-FROM oven/bun:1.1 as base
+FROM node:20-slim
 WORKDIR /app
-
-# Copy dependency definitions and install
-COPY package.json bun.lock* ./
-RUN bun install
-
-# Copy source code and build production assets
+COPY package.json ./
+RUN npm install --legacy-peer-deps
 COPY . .
-RUN bun run build || true
-
-# Expose app port
+RUN npm run build || true
 EXPOSE 3000
 ENV PORT=3000
-
-CMD ["bun", "run", "server.ts"]
+CMD ["npm", "start"]
