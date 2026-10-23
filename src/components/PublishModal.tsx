@@ -15,15 +15,11 @@ import {
   CheckCircle2,
   HardDrive,
   Loader2,
-  ExternalLink,
-  Download,
   AlertCircle,
-  FileText,
 } from 'lucide-react';
 import { SavedClip, SocialCopySet } from '../types';
 import { generatePlatformCopies, enforceMaxFiveHashtags } from '../utils/socialCopy';
 import { uploadClipToDrive, getAccessToken } from '../services/googleDrive';
-import { MarketingDocModal } from './MarketingDocModal';
 
 interface PublishModalProps {
   clip: SavedClip | null;
@@ -38,7 +34,7 @@ export const PublishModal: React.FC<PublishModalProps> = ({
   const [platformTab, setPlatformTab] = useState<'instagram' | 'linkedin' | 'facebook'>('instagram');
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [copiedHashtags, setCopiedHashtags] = useState(false);
-  const [isMarketingDocOpen, setIsMarketingDocOpen] = useState(false);
+
 
   // Google Drive Upload State
   const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
@@ -289,24 +285,17 @@ export const PublishModal: React.FC<PublishModalProps> = ({
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Modal Footer */}
+        <div className="flex items-center justify-end gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => setIsMarketingDocOpen(true)}
-            className="flex-1 py-3 px-4 rounded-xl bg-[#eb0028] hover:bg-[#d40024] text-white text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#eb0028]/25"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold transition cursor-pointer"
           >
-            <FileText className="w-4 h-4" />
-            <span>Social Media Marketing Doc</span>
+            Done
           </button>
         </div>
       </div>
-
-      {/* Social Media Marketing Doc Modal */}
-      <MarketingDocModal
-        isOpen={isMarketingDocOpen}
-        onClose={() => setIsMarketingDocOpen(false)}
-      />
     </div>
   );
 };

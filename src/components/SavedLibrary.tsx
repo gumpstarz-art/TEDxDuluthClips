@@ -11,15 +11,11 @@ import {
   Copy,
   Check,
   Trash2,
-  FileText,
-  ExternalLink,
   CheckCircle2,
-  Sparkles,
   Edit3,
   Sliders,
 } from 'lucide-react';
 import { SavedClip } from '../types';
-import { MarketingDocModal } from './MarketingDocModal';
 import { EditClipModal } from './EditClipModal';
 
 interface SavedLibraryProps {
@@ -39,7 +35,7 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
   onUpdateClip,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isMarketingDocOpen, setIsMarketingDocOpen] = useState(false);
+
   const [editingModalClip, setEditingModalClip] = useState<SavedClip | null>(null);
 
   const handleCopyCaption = (clip: SavedClip) => {
@@ -83,16 +79,8 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
           </p>
         </div>
 
-        {/* Right Header: Marketing Doc & Clip Counter */}
+        {/* Right Header: Clip Counter */}
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsMarketingDocOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-[#1a1d29] hover:bg-[#222636] border border-neutral-700 hover:border-[#eb0028]/60 text-neutral-200 hover:text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-          >
-            <FileText className="w-3.5 h-3.5 text-[#eb0028]" />
-            <span>Social Media Marketing Doc</span>
-          </button>
 
           <div className="flex items-center gap-2 px-3.5 py-2 bg-[#13151f] rounded-xl border border-neutral-800 text-xs text-neutral-300">
             <span className="w-2 h-2 rounded-full bg-[#eb0028]" />
@@ -246,24 +234,16 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
                 </button>
               </div>
 
-              {/* Dedicated "Social Media Marketing Doc" Link Button */}
-              <div className="flex items-center gap-2 pt-2 border-t border-neutral-800/80">
+              {/* Card Footer Actions */}
+              <div className="flex items-center justify-end pt-2 border-t border-neutral-800/80">
                 <button
                   type="button"
-                  onClick={() => setIsMarketingDocOpen(true)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-[#1a1d29] hover:bg-[#222636] border border-neutral-700 hover:border-[#eb0028]/60 text-neutral-200 hover:text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer"
-                  title="View Social Media Marketing Doc & Timeline"
-                >
-                  <FileText className="w-3.5 h-3.5 text-[#eb0028]" />
-                  <span>Social Media Marketing Doc</span>
-                </button>
-
-                <button
                   onClick={() => onDeleteClip(clip.id)}
-                  className="p-2 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-neutral-800/50 transition cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-xl text-neutral-500 hover:text-red-400 hover:bg-neutral-800/50 transition cursor-pointer text-xs flex items-center gap-1"
                   title="Delete clip from library"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete</span>
                 </button>
               </div>
             </div>
@@ -284,12 +264,6 @@ export const SavedLibrary: React.FC<SavedLibraryProps> = ({
           setEditingModalClip(null);
           onEditClipInStudio(clipToEdit);
         }}
-      />
-
-      {/* Social Media Marketing Doc Modal */}
-      <MarketingDocModal
-        isOpen={isMarketingDocOpen}
-        onClose={() => setIsMarketingDocOpen(false)}
       />
     </div>
   );

@@ -7,7 +7,6 @@ import {
   LogOut,
   Radio,
   Share2,
-  FileText,
 } from 'lucide-react';
 import { TeamMember, TalkProject } from '../types';
 
@@ -124,18 +123,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </nav>
 
-        {/* Marketing Doc Link & User Status */}
+        {/* User Status */}
         <div className="flex items-center gap-2.5">
-          <a
-            href="/assets/aistudio/ACTIVE_Social_Media_Marketing_-_TEDxDuluth_d628af5c"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#151821] hover:bg-neutral-800 border border-neutral-800 text-xs text-neutral-300 hover:text-white transition"
-            title="Open Social Media Marketing Doc"
-          >
-            <FileText className="w-3.5 h-3.5 text-[#eb0028]" />
-            <span className="font-semibold">Marketing Doc</span>
-          </a>
 
           {teamMember && (
             <div className="hidden sm:flex items-center gap-2 bg-[#151821] py-1 px-2.5 rounded-lg border border-neutral-800 text-xs">

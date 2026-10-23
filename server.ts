@@ -100,21 +100,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Notify Star / Video Ready Email Dispatch Endpoint
-app.post('/api/notify-email', (req, res) => {
-  const { recipient = 'star@tedxduluth.com', subject, note, clipTitle, speaker, duration } = req.body;
 
-  console.log(`[TEDxDuluth Notification] Video ready email logged for ${recipient}`);
-  console.log(`Subject: ${subject}`);
-  console.log(`Clip: "${clipTitle}" by ${speaker} (${duration}s)`);
-
-  return res.json({
-    success: true,
-    recipient,
-    dispatchedAt: new Date().toISOString(),
-    message: `Video ready notification recorded and prepared for ${recipient}`,
-  });
-});
 
 // Extract YouTube Info & Smart Transcript Helper
 app.post('/api/youtube-info', async (req, res) => {

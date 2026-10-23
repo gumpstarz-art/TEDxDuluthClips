@@ -30,7 +30,6 @@ import {
   Check,
   HardDrive,
   AlertCircle,
-  FileText,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -50,7 +49,7 @@ import {
 import { renderVerticalClip } from './VideoRenderer';
 import { generatePlatformCopies, enforceMaxFiveHashtags } from '../utils/socialCopy';
 import { uploadClipToDrive, getAccessToken } from '../services/googleDrive';
-import { MarketingDocModal } from './MarketingDocModal';
+
 
 interface ClipStudioProps {
   project: TalkProject;
@@ -198,7 +197,7 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
   const [renderProgress, setRenderProgress] = useState(0);
   const [renderStatus, setRenderStatus] = useState('');
   const [isAligning, setIsAligning] = useState(false);
-  const [isMarketingDocOpen, setIsMarketingDocOpen] = useState(false);
+
   const [timelineZoom, setTimelineZoom] = useState<'clip' | '2x' | '4x' | 'full'>('clip');
   const [selectedSubIndex, setSelectedSubIndex] = useState<number | null>(null);
 
@@ -1006,17 +1005,6 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsMarketingDocOpen(true)}
-            className="px-3.5 py-2 rounded-xl bg-[#171a25] hover:bg-[#202434] text-neutral-300 hover:text-white text-xs font-semibold border border-neutral-700 flex items-center gap-1.5 transition cursor-pointer"
-            title="View Social Media Marketing Plan & Schedule"
-          >
-            <FileText className="w-3.5 h-3.5 text-[#eb0028]" />
-            <span className="hidden sm:inline">Social Media Marketing Doc</span>
-            <span className="sm:hidden">Marketing Doc</span>
-          </button>
-
           <button
             onClick={onNavigateToLibrary}
             className="px-3.5 py-2 rounded-xl bg-[#171a25] hover:bg-[#202434] text-neutral-300 text-xs font-semibold border border-neutral-700 transition"
@@ -2405,11 +2393,6 @@ export const ClipStudio: React.FC<ClipStudioProps> = ({
         </div>
       )}
 
-      {/* Social Media Marketing Doc Modal */}
-      <MarketingDocModal
-        isOpen={isMarketingDocOpen}
-        onClose={() => setIsMarketingDocOpen(false)}
-      />
     </div>
   );
 };
